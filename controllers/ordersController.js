@@ -1,6 +1,7 @@
 var db = require("../models");
 var stripe = require('../config/stripe.js');
 var isAuthenticated = require('../config/middleware/isAuthenticated.js');
+var postmark = require("postmark");
 var sequelize = require('sequelize');
 
 // ROUTES
@@ -161,10 +162,19 @@ Functions-------------------------------------
       var email = data[0].dataValues.User.dataValues.email
       var name = data[0].dataValues.User.dataValues.firstName
       var msg = ""
+      var items = []
 
 	    // calculate total cost of cart items
 	    for (i=0; i < data.length; i++){
 	      total += data[i].quantity * data[i].Product.price;
+        msg += data[i].Product.name + ' x' + data[i].quantity +  ' total ' + 
+        data[i].quantity * data[i].Product.price + '\n' 
+        items.push(
+          {
+          "description": 'x' + data[i].quantity + ' ' + data[i].Product.name,
+          "amount": data[i].quantity * data[i].Product.price
+          }
+        )
 	      console.log ("Total is" + total);
 	      console.log("quantity " + data[i].quantity);
 	      console.log("price " + data[i].Product.price);
@@ -195,7 +205,23 @@ Functions-------------------------------------
 	            console.log(err);
               response.render('fail', {user: request.user});
 	          } else {
-	            console.log(charge);
+             
+              var client = new postmark.Client(process.env.POSTMARK_API);
+
+              client.sendEmailWithTemplate(
+              {
+                "From": "email@email.com",
+                "To": "email@email.com",
+                "TemplateId": templateId,
+                "TemplateModel": {
+                  "purchase_date": Date(),
+                  "name": name,
+                  "receipt_id": orderNum,
+                  "date": Date(),
+                  "receipt_details": items,
+                  "total": total,
+                }
+              });
               // clear the items from the cart
               clearCartContents();
 	          }
